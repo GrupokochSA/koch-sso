@@ -26,6 +26,7 @@ Os pacotes são consumidos por git tag, com o pnpm:
 - O pnpm suporta `path:` em git deps (testado: a ordem `path:...&v0.1.0` e `v0.1.0&path:...` funcionam; o `path:` leva `/` inicial). **npm e yarn não** têm o mesmo suporte a subdiretório; para eles a saída é publicar no GitHub Packages (`@koch` como escopo da org).
 - A tag aponta para um commit **avulso que carrega os `dist/`**, porque o pnpm só instala o que o pacote lista em `files`. Rodar `prepare` na instalação não serve: o pnpm 10+ exige que cada app liste o commit exato em `allowBuilds`.
 - Atualizar = trocar a tag no `package.json` do app.
+- **Dockerfile do app precisa de `git`** no stage que roda `pnpm install`: o pnpm clona o repo e falha com `spawn git ENOENT` em `node:*-slim`. Ex.: `apt-get install -y --no-install-recommends git ca-certificates` antes do `npm install -g pnpm`. O repo é público, não precisa de credencial.
 
 ## Publicar uma versão
 
