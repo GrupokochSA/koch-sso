@@ -205,9 +205,8 @@ describe("createRolesLookup", () => {
 
 		await lookup("leonardo.nunes");
 
-		expect((fetchMock.mock.calls[0]?.[1] as RequestInit).redirect).toBe(
-			"error",
-		);
+		const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+		expect(init.redirect).toBe("error");
 	});
 
 	// Cache e consulta têm de usar a mesma chave: senão um 404 de "ALICE"
