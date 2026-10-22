@@ -1,0 +1,9 @@
+packages:
+  - packages/*
+catalog:
+  typescript: ^6
+  "@types/node": ^22.13.14
+  vitest: ^4.1.10
+  tsdown: ^0.22.3
+allowBuilds:
+  esbuild: true
