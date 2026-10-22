@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+# Só o resultado do último commit da branch/PR interessa — run antiga pode morrer.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    # Mesmo runner dos outros repos da org (variável da organização com
+    # fallback no nome fixo), para trocar o runner sem PR em cada repo.
+    runs-on: ${{ vars.RUNNER_HEAVY || 'ci-cd' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          # Sem `version`: o action lê `packageManager` do package.json da raiz,
+          # que é a mesma versão usada localmente.
+          run_install: false
+
+      # Node 22 é o piso declarado em `engines`; testar nele garante o piso.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Instala dependências
+        run: pnpm install --frozen-lockfile
+
+      # `biome ci` = check sem --write: falha em vez de corrigir. NÃO usar o
+      # script `check` da raiz, que reescreveria arquivo no runner e sairia 0.
+      - name: Lint e formato
+        run: pnpm lint
+
+      - name: Type-check
+        run: pnpm check-types
+
+      - name: Testes
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
