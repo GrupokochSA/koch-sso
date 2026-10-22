@@ -233,24 +233,29 @@ describe("resolveAuthentikUser", () => {
 		).toBe("identidade");
 	});
 
-	// Provider sem property mappings: o outpost manda username em branco e o JWT
-	// sai sem preferred_username. Aceitar isso autenticaria alguém sem dono.
-	it("JWT válido sem preferred_username não autentica", async () => {
+	// Provider sem property mappings: o JWT sai sem preferred_username.
+	// Aceitar isso autenticaria alguém sem dono, e em `optional` cairia no
+	// anônimo em silêncio: é configuração quebrada, então recusa.
+	it("JWT válido sem preferred_username é recusado — motivo identidade", async () => {
 		const token = await signProxyJwt({ claims: {} });
 
-		await expect(
-			resolveAuthentikUser({ "x-authentik-jwt": token }, config),
-		).resolves.toBeUndefined();
+		expect(
+			await reasonOf(
+				resolveAuthentikUser({ "x-authentik-jwt": token }, config),
+			),
+		).toBe("identidade");
 	});
 
-	it("preferred_username em branco não autentica", async () => {
+	it("preferred_username em branco é recusado — motivo identidade", async () => {
 		const token = await signProxyJwt({
 			claims: { preferred_username: "   " },
 		});
 
-		await expect(
-			resolveAuthentikUser({ "x-authentik-jwt": token }, config),
-		).resolves.toBeUndefined();
+		expect(
+			await reasonOf(
+				resolveAuthentikUser({ "x-authentik-jwt": token }, config),
+			),
+		).toBe("identidade");
 	});
 
 	it.each(["", "   "])(
@@ -277,5 +282,33 @@ describe("resolveAuthentikUser", () => {
 				config,
 			),
 		).rejects.toBeInstanceOf(AuthentikJwtError);
+	});
+
+	// Node junta headers repetidos em string, mas um adapter/proxy pode
+	// entregar array. Header presente e não-string é suspeito, não "sem SSO".
+	it("X-authentik-jwt em array lança em vez de passar como anônimo", async () => {
+		const token = await signProxyJwt();
+
+		expect(
+			await reasonOf(
+				resolveAuthentikUser({ "x-authentik-jwt": [token] }, config),
+			),
+		).toBe("formato");
+	});
+
+	it("X-authentik-username em array lança em vez de pular a conferência", async () => {
+		const token = await signProxyJwt();
+
+		expect(
+			await reasonOf(
+				resolveAuthentikUser(
+					{
+						"x-authentik-jwt": token,
+						"x-authentik-username": ["outra.pessoa"],
+					},
+					config,
+				),
+			),
+		).toBe("formato");
 	});
 });

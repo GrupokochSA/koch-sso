@@ -32,7 +32,8 @@ export const authentikConfig = buildAuthentikJwtConfig({
 (`preferred_username`, `email`, `name`, `groups`). `X-authentik-username` é só
 conferência: se vier preenchido e divergir do claim, a requisição é recusada
 (um JWT válido capturado não serve para outro usuário). JWT sem
-`preferred_username` (provider sem property mappings) não autentica.
+`preferred_username` (provider sem property mappings) é recusado com 401, até em `optional`:
+é configuração quebrada, não "sem SSO".
 
 ## Adapters
 
@@ -46,7 +47,11 @@ Opções comuns: `config`, `optional` (sem JWT segue anônimo, para cair na sess
 própria do app durante a migração; JWT inválido continua 401) e `onReject`.
 
 Nenhum adapter declara `req.user` globalmente, para não colidir com o tipo que o
-app (ou passport) já tem. Use os tipos exportados ou declare o seu.
+app (ou passport) já tem. Use os tipos exportados ou declare o seu (`user` é
+opcional: fica `undefined` só com `optional` e sem JWT).
+
+TS com `moduleResolution: node10` (comum em app Nest antigo) resolve os tipos dos
+subpaths via `typesVersions`; `node16`/`nodenext`/`bundler` via `exports`.
 
 ### Express (4 ou 5)
 

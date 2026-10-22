@@ -7,9 +7,9 @@ import {
 
 export type { AuthentikAuthOptions };
 
-/** `req.user` depois do middleware. Sem augmentation global para não colidir
+/** `user` fica undefined com `optional` e sem JWT. `req.user` depois do middleware. Sem augmentation global para não colidir
  * com o `Request.user` que o app (ou passport) já declara. */
-export type AuthentikRequest = Request & { user: AuthentikIdentity };
+export type AuthentikRequest = Request & { user?: AuthentikIdentity };
 
 export function authentikAuth(options: AuthentikAuthOptions): RequestHandler {
 	return async (req: Request, res: Response, next: NextFunction) => {

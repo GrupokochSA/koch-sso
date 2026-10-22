@@ -64,6 +64,22 @@
 		},
 		"./package.json": "./package.json"
 	},
+	"typesVersions": {
+		"*": {
+			"express": [
+				"dist/express.d.cts"
+			],
+			"fastify": [
+				"dist/fastify.d.cts"
+			],
+			"nest": [
+				"dist/nest.d.cts"
+			],
+			"consinco": [
+				"dist/consinco.d.cts"
+			]
+		}
+	},
 	"engines": {
 		"node": ">=22"
 	},

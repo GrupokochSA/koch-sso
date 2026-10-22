@@ -7,10 +7,10 @@ import {
 
 export type { AuthentikAuthOptions };
 
-/** `request.user` depois do plugin. Sem augmentation global para não colidir
+/** `user` fica undefined com `optional` e sem JWT. `request.user` depois do plugin. Sem augmentation global para não colidir
  * com o `request.user` que o app já declara. */
 export type AuthentikFastifyRequest = FastifyRequest & {
-	user: AuthentikIdentity;
+	user?: AuthentikIdentity;
 };
 
 const plugin: FastifyPluginAsync<AuthentikAuthOptions> = async (

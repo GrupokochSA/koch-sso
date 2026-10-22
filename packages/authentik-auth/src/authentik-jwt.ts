@@ -1,17 +1,6 @@
 import { errors, jwtVerify } from "jose";
 
-/**
- * Valida o X-authentik-jwt do forwardAuth e tira a identidade dos claims dele.
- *
- * O proxy provider do authentik 2024.8.3 assina esse JWT com HS256 usando o
- * client secret do provider — o JWKS da aplicação volta `{}`, então conferir
- * por JWKS recusa toda requisição. `algorithms: ["HS256"]` é fixo: o secret é
- * a chave, e aceitar outro alg abriria confusão de algoritmo.
- *
- * A assinatura prova que a requisição passou de fato pelo outpost, fechando o
- * bypass por header forjado direto no backend (qualquer container na mesma
- * overlay alcança o app sem passar pelo Traefik).
- */
+/** `secret` = client secret do provider; `audience` = client id; `issuer` = issuer do provider. */
 export interface AuthentikJwtConfig {
 	secret: Uint8Array;
 	audience: string;
@@ -60,6 +49,18 @@ function failureReasonOf(error: unknown): AuthentikJwtFailureReason {
 	return "formato";
 }
 
+/**
+ * Valida assinatura, aud, iss e exp do X-authentik-jwt do forwardAuth.
+ *
+ * O proxy provider do authentik 2024.8.3 assina esse JWT com HS256 usando o
+ * client secret do provider — o JWKS da aplicação volta `{}`, então conferir
+ * por JWKS recusa toda requisição. `algorithms: ["HS256"]` é fixo: o secret é
+ * a chave, e aceitar outro alg abriria confusão de algoritmo.
+ *
+ * A assinatura prova que a requisição passou de fato pelo outpost, fechando o
+ * bypass por header forjado direto no backend (qualquer container na mesma
+ * overlay alcança o app sem passar pelo Traefik).
+ */
 export async function verifyAuthentikJwt(
 	token: string,
 	config: AuthentikJwtConfig,
@@ -90,11 +91,11 @@ function nonBlankString(value: unknown): string | undefined {
 
 function identityFromClaims(
 	claims: Record<string, unknown>,
-): AuthentikIdentity | undefined {
+): AuthentikIdentity {
 	const username = nonBlankString(claims.preferred_username)?.trim();
 	// Provider sem property mappings de escopo emite o JWT sem
 	// preferred_username; aceitar isso criaria sessão autenticada sem dono.
-	if (!username) return undefined;
+	if (!username) throw new AuthentikJwtError("identidade");
 
 	const email = nonBlankString(claims.email);
 	const name = nonBlankString(claims.name);
@@ -127,15 +128,20 @@ export async function resolveAuthentikUser(
 	config: AuthentikJwtConfig | undefined,
 ): Promise<AuthentikIdentity | undefined> {
 	const jwt = headers["x-authentik-jwt"];
-	if (!config || typeof jwt !== "string") return undefined;
+	if (!config || jwt === undefined) return undefined;
+	// Presente e não-string (header repetido entregue como array) é forjamento
+	// possível, não "sem SSO": em `optional` virar anônimo seria bypass.
+	if (typeof jwt !== "string") throw new AuthentikJwtError("formato");
 
 	const claims = await verifyAuthentikJwt(jwt, config);
 	const identity = identityFromClaims(claims);
-	if (!identity) return undefined;
 
 	const headerUsername = headers["x-authentik-username"];
+	if (headerUsername !== undefined && typeof headerUsername !== "string") {
+		throw new AuthentikJwtError("formato");
+	}
 	if (
-		typeof headerUsername === "string" &&
+		headerUsername !== undefined &&
 		headerUsername.trim() !== "" &&
 		headerUsername.trim() !== identity.username
 	) {

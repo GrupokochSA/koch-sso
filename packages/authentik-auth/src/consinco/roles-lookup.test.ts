@@ -178,7 +178,7 @@ describe("createRolesLookup", () => {
 	});
 
 	// Username vai no path: sem validar, "../x" ou "a/b" reescreveria a rota.
-	it.each(["", "a/b", "../admin", "a b", "x".repeat(65), "joão"])(
+	it.each(["", "a/b", "../admin", ".", "..", "a b", "x".repeat(65), "joão"])(
 		"rejeita username inválido %j sem chamar a API",
 		async (username) => {
 			const fetchMock = vi.fn();
@@ -192,6 +192,40 @@ describe("createRolesLookup", () => {
 			expect(fetchMock).not.toHaveBeenCalled();
 		},
 	);
+
+	// O fetch segue redirect por padrão e o undici só tira authorization/cookie
+	// ao trocar de origem, não x-service-token.
+	it("não segue redirect, pra não levar o service token a outra origem", async () => {
+		const fetchMock = vi.fn().mockResolvedValue(okResponse());
+		const lookup = createRolesLookup({
+			baseUrl: BASE_URL,
+			serviceToken: SERVICE_TOKEN,
+			fetch: fetchMock,
+		});
+
+		await lookup("leonardo.nunes");
+
+		expect((fetchMock.mock.calls[0]?.[1] as RequestInit).redirect).toBe(
+			"error",
+		);
+	});
+
+	// Cache e consulta têm de usar a mesma chave: senão um 404 de "ALICE"
+	// ficaria em cache e negaria "alice".
+	it("consulta a API com o username em minúsculas, a mesma chave do cache", async () => {
+		const fetchMock = vi.fn().mockResolvedValue(okResponse());
+		const lookup = createRolesLookup({
+			baseUrl: BASE_URL,
+			serviceToken: SERVICE_TOKEN,
+			fetch: fetchMock,
+		});
+
+		await lookup("Leonardo.Nunes");
+
+		expect(fetchMock.mock.calls[0]?.[0]).toBe(
+			`${BASE_URL}/users/leonardo.nunes/roles`,
+		);
+	});
 
 	describe("cache", () => {
 		it("reaproveita a resposta dentro do TTL, sem diferenciar maiúsculas", async () => {
@@ -260,6 +294,24 @@ describe("createRolesLookup", () => {
 			await expect(lookup("fulano")).resolves.toBeNull();
 
 			expect(fetchMock).toHaveBeenCalledTimes(1);
+		});
+
+		it("limita o tamanho do cache descartando a entrada mais antiga", async () => {
+			const fetchMock = vi.fn().mockImplementation(async () => okResponse());
+			const lookup = createRolesLookup({
+				baseUrl: BASE_URL,
+				serviceToken: SERVICE_TOKEN,
+				fetch: fetchMock,
+				maxEntries: 2,
+			});
+
+			await lookup("a");
+			await lookup("b");
+			await lookup("c"); // expulsa "a"
+			await lookup("b");
+			expect(fetchMock).toHaveBeenCalledTimes(3);
+			await lookup("a");
+			expect(fetchMock).toHaveBeenCalledTimes(4);
 		});
 
 		// Cachear erro transitório trancaria o usuário fora por 5 minutos.

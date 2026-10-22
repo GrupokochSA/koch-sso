@@ -27,13 +27,13 @@ export type AuthenticationOutcome =
 	| { kind: "anonymous" }
 	| { kind: "rejected"; body: AuthentikErrorBody };
 
-export const UNAUTHENTICATED: AuthentikErrorBody = {
+const UNAUTHENTICATED: AuthentikErrorBody = {
 	error: { code: "UNAUTHENTICATED", message: "Autenticação necessária" },
 };
 
 // Mensagem genérica de propósito: dizer ao cliente se falhou aud, iss ou
 // assinatura ajuda quem tenta forjar. O motivo vai só para `onReject`.
-export const INVALID_AUTHENTIK_JWT: AuthentikErrorBody = {
+const INVALID_AUTHENTIK_JWT: AuthentikErrorBody = {
 	error: {
 		code: "INVALID_AUTHENTIK_JWT",
 		message: "Token do authentik inválido ou expirado",

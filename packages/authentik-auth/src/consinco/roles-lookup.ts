@@ -28,6 +28,8 @@ export interface RolesLookupOptions {
 	/** Default 5 min — o mesmo TTL do cache da própria `autenticacao`. */
 	ttlMs?: number;
 	timeoutMs?: number;
+	/** Teto do cache; estourou, descarta a entrada mais antiga. Default 1000. */
+	maxEntries?: number;
 	now?: () => number;
 }
 
@@ -45,9 +47,12 @@ export class RolesLookupError extends Error {
 
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_TIMEOUT_MS = 5000;
+const DEFAULT_MAX_ENTRIES = 1000;
 // Mesma regra de `usernameParamSchema` da autenticacao. O username vai no
-// path: sem validar, "../x" reescreveria a rota.
+// path: sem validar, "../x" reescreveria a rota. O regex aceita "." e "..",
+// que o fetch normaliza no path; por isso o segundo teste.
 const USERNAME_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
+const DOTS_ONLY = /^\.+$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
@@ -98,6 +103,7 @@ export function createRolesLookup({
 	fetch: fetchImpl = fetch,
 	ttlMs = DEFAULT_TTL_MS,
 	timeoutMs = DEFAULT_TIMEOUT_MS,
+	maxEntries = DEFAULT_MAX_ENTRIES,
 	now = Date.now,
 }: RolesLookupOptions): (username: string) => Promise<ConsincoUser | null> {
 	const root = baseUrl.replace(/\/+$/, "");
@@ -107,7 +113,7 @@ export function createRolesLookup({
 	>();
 
 	return async (username) => {
-		if (!USERNAME_PATTERN.test(username)) {
+		if (!USERNAME_PATTERN.test(username) || DOTS_ONLY.test(username)) {
 			throw new RolesLookupError("username inválido");
 		}
 
@@ -117,8 +123,12 @@ export function createRolesLookup({
 
 		let response: Response;
 		try {
-			response = await fetchImpl(`${root}/users/${username}/roles`, {
+			// `key` (minúsculo) na consulta: mesma chave do cache, senão o 404 de
+			// "ALICE" negaria "alice" por 5 min se a API diferenciasse caixa.
+			response = await fetchImpl(`${root}/users/${key}/roles`, {
 				method: "GET",
+				// O fetch seguiria 30x levando o x-service-token a outra origem.
+				redirect: "error",
 				headers: { "x-service-token": serviceToken },
 				signal: AbortSignal.timeout(timeoutMs),
 			});
@@ -146,6 +156,11 @@ export function createRolesLookup({
 			user = parsed;
 		}
 
+		if (cache.size >= maxEntries && !cache.has(key)) {
+			// Map preserva ordem de inserção: o primeiro é o mais antigo.
+			const oldest = cache.keys().next().value;
+			if (oldest !== undefined) cache.delete(oldest);
+		}
 		cache.set(key, { expiresAt: now() + ttlMs, user });
 		return user;
 	};
