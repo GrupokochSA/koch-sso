@@ -77,7 +77,7 @@
 		"jose": "^6.2.5"
 	},
 	"peerDependencies": {
-		"@nestjs/common": "^10 || ^11",
+		"@nestjs/common": "^11",
 		"express": "^4 || ^5",
 		"fastify": "^5"
 	},

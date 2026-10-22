@@ -77,6 +77,23 @@ describe("authentikAuthPlugin (fastify)", () => {
 		expect(response.statusCode).toBe(401);
 	});
 
+	// O hook vale para o escopo onde o plugin foi registrado, inclusive rotas
+	// declaradas antes do register. Rota pública (health) precisa ficar num
+	// escopo irmão, não no mesmo.
+	it("rotas fora do escopo onde o plugin foi registrado ficam públicas", async () => {
+		const app = Fastify();
+		app.get("/health", async () => "ok");
+		await app.register(async (protectedScope) => {
+			await protectedScope.register(authentikAuthPlugin, {
+				config: testConfig,
+			});
+			protectedScope.get("/me", async () => "protegido");
+		});
+
+		expect((await app.inject("/health")).statusCode).toBe(200);
+		expect((await app.inject("/me")).statusCode).toBe(401);
+	});
+
 	it("optional: sem JWT passa sem request.user", async () => {
 		const app = await buildApp({ config: testConfig, optional: true });
 
